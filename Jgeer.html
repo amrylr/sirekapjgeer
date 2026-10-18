@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIREKAP PB JGEER</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800 min-h-screen py-8 px-4">
+
+    <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-stone-200">
+        <!-- Header (Tema Merah Maroon) -->
+        <div class="bg-gradient-to-r from-red-900 to-rose-900 p-6 text-white text-center relative">
+            <h1 class="text-2xl font-bold tracking-tight">SIREKAP PB JGEER</h1>
+            <p class="text-red-200 text-sm mt-1">Absensi, pemakaian kok, & laporan</p>
+            
+            <!-- Indicator Status Firebase -->
+            <div id="firebase-status-badge" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-950/60 text-red-200 border border-red-800/60">
+                <span class="w-2 h-2 rounded-full bg-amber-400" id="status-dot"></span>
+                <span id="status-text">Menghubungkan...</span>
+            </div>
+
+            <!-- Tab Navigasi Menu -->
+            <div class="flex justify-center gap-2 mt-4">
+                <button id="tab-rekap" onclick="gantiTab('rekap')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-white text-red-900 shadow">
+                    📝 Input Rekap
+                </button>
+                <button id="tab-riwayat" onclick="gantiTab('riwayat')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-red-950/50 text-red-100 hover:bg-red-950/80">
+                    📜 Riwayat Transaksi
+                </button>
+            </div>
+
+            <!-- Action Buttons di Header (Reset Saja, Modal Firebase Dihapus) -->
+            <div class="absolute top-4 right-4 flex gap-1.5">
+                <button onclick="mintaResetHariIni()" class="bg-red-950/40 hover:bg-red-950/70 text-red-100 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-red-800/50 transition flex items-center gap-1 cursor-pointer" title="Reset input hari ini">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset Hari Ini
+                </button>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-6">
+            
+            <!-- VIEW 1: TAB REKAP & INPUT -->
+            <div id="view-rekap" class="space-y-6">
+                <!-- Banner Mode Edit Riwayat -->
+                <div id="banner-mode-edit" class="hidden bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-xl flex justify-between items-center text-xs font-medium">
+                    <span id="label-mode-edit">✏️ Sedang Merevisi Sesi Transaksi...</span>
+                    <button onclick="batalEditSesi()" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-lg font-bold">
+                        Batal Edit
+                    </button>
+                </div>
+
+                <!-- STEP 1: ABSENSI PEMAIN -->
+                <div id="section-absensi" class="space-y-5">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-stone-700 flex items-center gap-2">
+                            <span class="bg-red-100 text-red-900 text-xs font-bold px-2.5 py-1 rounded-full">Langkah 1</span> 
+                            Absensi Kehadiran Anggota & Guest
+                        </h2>
+                        <span id="selected-count" class="text-xs text-stone-500 font-medium">0 hadir</span>
+                    </div>
+
+                    <p class="text-xs text-stone-500">Centang nama anggota yang hadir hari ini, atau tambahkan <b>Guest</b> di bawah jika ada pemain tamu.</p>
+
+                    <!-- Tombol Pilih Semua / Reset -->
+                    <div class="flex gap-2 text-xs font-medium">
+                        <button onclick="pilihSemua(true)" class="text-red-900 hover:text-red-950 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition cursor-pointer">Pilih Semua Anggota</button>
+                        <button onclick="pilihSemua(false)" class="text-stone-600 hover:text-stone-700 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200 transition cursor-pointer">Batalkan Semua</button>
+                    </div>
+
+                    <!-- Daftar Anggota Checkboxes -->
+                    <div class="border border-stone-200 rounded-xl p-4 bg-stone-50/50 max-h-[220px] overflow-y-auto">
+                        <p class="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Daftar Anggota Tim:</p>
+                        <div id="anggota-checkboxes" class="grid grid-cols-2 gap-2">
+                            <!-- Render via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Input Guest / Manual -->
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-stone-500 uppercase tracking-wider">Tambah Guest / Pemain Tamu:</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="input-guest" placeholder="Nama guest..." 
+                                   class="flex-1 px-4 py-2.5 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-800 focus:border-transparent text-sm">
+                            <button onclick="tambahGuest()" 
+                                    class="bg-red-800 hover:bg-red-900 text-white font-medium px-5 py-2.5 rounded-xl transition text-sm shadow-sm cursor-pointer">
+                                Tambah Guest
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Daftar Guest yang Ditambahkan -->
+                    <div id="guest-container" class="hidden space-y-2">
+                        <p class="text-xs font-semibold text-stone-400 uppercase tracking-wider">Guest Terdaftar:</p>
+                        <ul id="list-guest" class="space-y-1.5"></ul>
+                    </div>
+
+                    <!-- Tombol Lanjut -->
+                    <button onclick="lanjutKeHitung()" id="btn-lanjut" disabled
+                            class="w-full bg-stone-300 text-stone-500 font-semibold py-3 rounded-xl transition cursor-not-allowed shadow-sm">
+                        Lanjut ke Input Pemakaian Kok ➔
+                    </button>
+                </div>
+
+                <!-- STEP 2: INPUT PEMAKAIAN KOK, SALDO KAS, & LAPORAN -->
+                <div id="section-hitung" class="space-y-6 hidden">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-stone-700 flex items-center gap-2">
+                            <span class="bg-red-100 text-red-900 text-xs font-bold px-2.5 py-1 rounded-full">Langkah 2</span> 
+                            Pemakaian Kok & Rekap Kas
+                        </h2>
+                        <button onclick="kembaliKeAbsen()" class="text-xs text-red-800 font-semibold hover:underline cursor-pointer">
+                            ← Edit Absensi
+                        </button>
+                    </div>
+
+                    <!-- Input Tanggal Sesi -->
+                    <div class="space-y-1">
+                        <label class="block text-xs font-bold text-stone-600 uppercase tracking-wider">📅 Tanggal Sesi Latihan</label>
+                        <input type="date" id="input-tanggal-sesi" onchange="hitungTotal()" 
+                               class="w-full px-3 py-2 border border-stone-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-800 focus:outline-none bg-white">
+                    </div>
+
+                    <!-- Daftar Input Kok per Pemain -->
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-stone-500 uppercase tracking-wider">Input Jumlah Kok Pemain (Rp 5.000 / kok):</label>
+                        <div class="space-y-3 max-h-[240px] overflow-y-auto pr-1" id="input-kok-container">
+                            <!-- Dinamis via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Input Saldo Kas Terakhir -->
+                    <div class="bg-red-50/70 border border-red-200 rounded-xl p-4 space-y-2">
+                        <label for="input-kas-terakhir" class="block text-xs font-bold text-red-900 uppercase tracking-wider">
+                            💰 Saldo Kas Awal / Terakhir
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-sm font-semibold text-stone-500">Rp</span>
+                            <input type="number" id="input-kas-terakhir" placeholder="0" value="0" oninput="hitungTotal(); simpanDataKeStorage();"
+                                   class="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-red-800 bg-white">
+                        </div>
+                        <p class="text-[11px] text-stone-500">Saldo kas sebelum main. Pemasukan (Rp 4.000/kok) akan otomatis ditambahkan.</p>
+                    </div>
+
+                    <!-- Ringkasan Total & Rekap Kas -->
+                    <div class="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-2.5">
+                        <div class="flex justify-between text-sm text-stone-600">
+                            <span>Total Kok Terpakai:</span>
+                            <span id="summary-total-kok" class="font-bold text-stone-800">0 pcs</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-stone-600">
+                            <span>Total Patungan Pemain:</span>
+                            <span id="summary-total-patungan" class="font-bold text-stone-800">Rp 0</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-stone-600 border-t border-stone-200/60 pt-2">
+                            <span>Kas Terakhir:</span>
+                            <span id="summary-kas-terakhir" class="font-semibold text-stone-700">Rp 0</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-stone-600">
+                            <span>Pemasukan Kas Hari Ini (Rp 4.000/kok):</span>
+                            <span id="summary-insentif-kas" class="font-bold text-emerald-700">+ Rp 0</span>
+                        </div>
+                        <div class="flex justify-between text-base font-bold text-stone-800 border-t border-stone-300 pt-2">
+                            <span>Total Kas Terbaru Sekarang:</span>
+                            <span id="summary-total-kas-akhir" class="text-red-800">Rp 0</span>
+                        </div>
+                    </div>
+
+                    <!-- Preview Laporan WhatsApp -->
+                    <div class="space-y-2">
+                        <label class="text-xs font-semibold text-stone-500 uppercase tracking-wider">Preview Pesan WhatsApp:</label>
+                        <textarea id="wa-preview" readonly rows="10" 
+                                  class="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono text-stone-700 focus:outline-none"></textarea>
+                    </div>
+
+                    <!-- Group Tombol Aksi Sesi -->
+                    <div class="space-y-2">
+                        <button id="btn-simpan-sesi" onclick="simpanSesiKeRiwayat()" 
+                                class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            <span id="text-btn-simpan">Simpan Transaksi ke Riwayat</span>
+                        </button>
+
+                        <button onclick="salinKeWA()" 
+                                class="w-full bg-red-800 hover:bg-red-900 text-white font-semibold py-3 rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            Salin Laporan untuk WhatsApp
+                        </button>
+                    </div>
+
+                    <p id="copy-notification" class="text-center text-xs text-red-800 font-medium hidden">Berhasil disalin ke clipboard! Siap dipaste ke WhatsApp.</p>
+                </div>
+            </div>
+
+            <!-- VIEW 2: TAB RIWAYAT TRANSAKSI & REVISI -->
+            <div id="view-riwayat" class="space-y-4 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-base font-bold text-stone-700">Daftar Transaksi / Sesi Tersimpan</h2>
+                    <span id="riwayat-count" class="text-xs text-stone-500">0 transaksi</span>
+                </div>
+
+                <!-- Container List Sesi -->
+                <div id="list-riwayat-container" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                    <!-- Rendered via JS -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMATION DIALOG (Ganti confirm standard) -->
+    <div id="modal-confirm" class="fixed inset-0 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl border border-stone-200 animate-in fade-in zoom-in duration-150">
+            <h3 id="confirm-title" class="text-base font-bold text-stone-800">Konfirmasi</h3>
+            <p id="confirm-message" class="text-xs text-stone-600 leading-relaxed">Apakah Anda yakin?</p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button id="btn-cancel-confirm" class="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 transition">Batal</button>
+                <button id="btn-ok-confirm" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-800 hover:bg-red-900 transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi Database (PBJGEER)
+        const defaultFirebaseConfig = {
+            apiKey: "AIzaSyAmQ7JJQ32Ir7f4qKKVjk2tSOX8V0gl0i4",
+            authDomain: "pbjgeer-26c8b.firebaseapp.com",
+            projectId: "pbjgeer-26c8b",
+            storageBucket: "pbjgeer-26c8b.firebasestorage.app",
+            messagingSenderId: "731670438184",
+            appId: "1:731670438184:web:e420b444556eb82638301d",
+            measurementId: "G-5WN3C0DCTR"
+        };
+
+        window.db = null;
+        window.auth = null;
+        window.isFirebaseActive = false;
+
+        window.inisialisasiFirebase = async function(config) {
+            try {
+                const app = initializeApp(config);
+                window.auth = getAuth(app);
+                window.db = getFirestore(app);
+                
+                try {
+                    await signInAnonymously(window.auth);
+                } catch (authErr) {
+                    console.warn("Autentikasi Anonim Firebase dibatasi:", authErr.message);
+                }
+                
+                window.isFirebaseActive = true;
+                document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-emerald-400";
+                document.getElementById('status-text').innerText = "Firebase Terhubung";
+                
+                muatRiwayatDariFirebase();
+            } catch (e) {
+                console.error("Gagal koneksi Firebase", e);
+                window.isFirebaseActive = false;
+                document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-amber-400";
+                document.getElementById('status-text').innerText = "Lokal (Tersimpan)";
+            }
+        };
+
+        window.muatRiwayatDariFirebase = function() {
+            if (!window.db) return;
+            try {
+                const colRef = collection(window.db, 'riwayat_transaksi');
+                
+                onSnapshot(colRef, (snapshot) => {
+                    let dataFB = [];
+                    snapshot.forEach(docSnap => {
+                        dataFB.push(docSnap.data());
+                    });
+                    if (dataFB.length > 0) {
+                        dataFB.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+                        window.riwayatTransaksi = dataFB;
+                        localStorage.setItem(RIWAYAT_KEY, JSON.stringify(dataFB));
+                        if (typeof renderRiwayatList === 'function') {
+                            renderRiwayatList();
+                        }
+                        // TAMBAHAN: Paksa update kolom kas setelah data dari cloud masuk
+                        if (typeof setKasAwalOtomatis === 'function') {
+                            setKasAwalOtomatis();
+                        }
+                    }
+                }, (error) => {
+                    console.warn("Menggunakan penyimpanan lokal HP/Browser:", error.message);
+                    document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-amber-400";
+                    document.getElementById('status-text').innerText = "Tersimpan di HP (Lokal)";
+                });
+            } catch (err) {
+                console.warn("Koneksi Firestore dibatasi:", err);
+            }
+        };
+
+        window.simpanKeFirebaseDoc = async function(dataSesi) {
+            if (!window.db) return;
+            try {
+                const docRef = doc(window.db, 'riwayat_transaksi', dataSesi.id);
+                await setDoc(docRef, dataSesi, { merge: true });
+            } catch (err) {
+                console.warn("Data tersimpan aman di penyimpanan lokal HP:", err.message);
+            }
+        };
+
+        window.inisialisasiFirebase(defaultFirebaseConfig);
+    </script>
+
+    <script>
+        const daftarAnggota = [
+            "Amri", "Sofi", "Fany", "Maul", "Udin", 
+            "Doni", "Faisal", "Ali", "Suyanto", "Anong", 
+            "Utuy", "Indra", "Denis", "Ade", "Nanjar", 
+            "Ihsan", "Yuswan"
+        ];
+        
+        let daftarGuest = [];
+        let pemainHadir = [];
+        let riwayatTransaksi = [];
+        let idSesiEditing = null;
+
+        const PATUNGAN_PER_KOK = 5000;
+        const INSENTIF_KAS_PER_KOK = 4000;
+        const STORAGE_KEY = "badminton_calc_data_maroon_v5";
+        const RIWAYAT_KEY = "badminton_calc_riwayat_v5";
+
+        const inputKasTerakhir = document.getElementById('input-kas-terakhir');
+        const inputGuest = document.getElementById('input-guest');
+        const anggotaContainer = document.getElementById('anggota-checkboxes');
+        const guestContainer = document.getElementById('guest-container');
+        const listGuest = document.getElementById('list-guest');
+        const btnLanjut = document.getElementById('btn-lanjut');
+        const selectedCount = document.getElementById('selected-count');
+        const inputTanggalSesi = document.getElementById('input-tanggal-sesi');
+
+        let pendingConfirmCallback = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // TAMPILKAN LANGSUNG DATA DARI LOCAL STORAGE AGAR TIDAK HILANG SAAT REFRESH
+            muatRiwayatTersimpan();
+            renderAnggota();
+            muatDataTersimpan();
+
+            // Set tanggal hari ini sebagai default jika belum diatur
+            if (!inputTanggalSesi.value) {
+                setTanggalHariIni();
+            }
+
+            // Opsi Otomatisasi Kas Terakhir: Ambil dari kasAkhir transaksi paling baru jika kas belum diisi manual
+            setKasAwalOtomatis();
+
+            updateStatusAbsen();
+
+            document.getElementById('btn-cancel-confirm').onclick = () => {
+                document.getElementById('modal-confirm').classList.add('hidden');
+            };
+            document.getElementById('btn-ok-confirm').onclick = () => {
+                document.getElementById('modal-confirm').classList.add('hidden');
+                if (pendingConfirmCallback) pendingConfirmCallback();
+            };
+        });
+
+        function setTanggalHariIni() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            inputTanggalSesi.value = `${year}-${month}-${day}`;
+        }
+
+        function setKasAwalOtomatis() {
+            // Mencegah nilai kas tertimpa jika pengguna sedang dalam mode 'Revisi Sesi'
+            if (idSesiEditing !== null) return;
+
+            // Ambil kas akhir dari sesi/transaksi paling baru jika riwayat tersedia
+            if (riwayatTransaksi && riwayatTransaksi.length > 0) {
+                // Karena data sudah disortir dari yang terbaru, index [0] adalah transaksi terakhir
+                const transaksiTerbaru = riwayatTransaksi[0]; 
+                if (transaksiTerbaru && transaksiTerbaru.kasAkhir !== undefined) {
+                    inputKasTerakhir.value = transaksiTerbaru.kasAkhir;
+                    // Simpan sementara di storage agar angka tidak hilang saat halaman di-refresh
+                    if (typeof simpanDataKeStorage === 'function') {
+                        simpanDataKeStorage(); 
+                    }
+                    return;
+                }
+            }
+        }
+
+        function showConfirm(title, message, onConfirm) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-message').innerText = message;
+            pendingConfirmCallback = onConfirm;
+            document.getElementById('modal-confirm').classList.remove('hidden');
+        }
+
+        function gantiTab(tab) {
+            const viewRekap = document.getElementById('view-rekap');
+            const viewRiwayat = document.getElementById('view-riwayat');
+            const tabRekap = document.getElementById('tab-rekap');
+            const tabRiwayat = document.getElementById('tab-riwayat');
+
+            if (tab === 'rekap') {
+                viewRekap.classList.remove('hidden');
+                viewRiwayat.classList.add('hidden');
+                tabRekap.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-white text-red-900 shadow cursor-pointer";
+                tabRiwayat.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-red-950/50 text-red-100 hover:bg-red-950/80 cursor-pointer";
+            } else {
+                viewRekap.classList.add('hidden');
+                viewRiwayat.classList.remove('hidden');
+                tabRiwayat.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-white text-red-900 shadow cursor-pointer";
+                tabRekap.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-red-950/50 text-red-100 hover:bg-red-950/80 cursor-pointer";
+                renderRiwayatList();
+            }
+        }
+
+        function renderAnggota() {
+            anggotaContainer.innerHTML = "";
+            daftarAnggota.forEach((nama) => {
+                const label = document.createElement('label');
+                label.className = "flex items-center gap-2.5 p-2 bg-white rounded-lg border border-stone-200 text-sm cursor-pointer hover:bg-stone-100 transition select-none";
+                label.innerHTML = `
+                    <input type="checkbox" value="${nama}" onchange="updateStatusAbsen(); simpanDataKeStorage();" class="w-4 h-4 text-red-800 rounded border-stone-300 focus:ring-red-700 checkbox-anggota">
+                    <span class="font-medium text-stone-700 truncate">${nama}</span>
+                `;
+                anggotaContainer.appendChild(label);
+            });
+        }
+
+        function pilihSemua(status) {
+            const checkboxes = document.querySelectorAll('.checkbox-anggota');
+            checkboxes.forEach(cb => cb.checked = status);
+            updateStatusAbsen();
+            simpanDataKeStorage();
+        }
+
+        inputGuest.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                tambahGuest();
+            }
+        });
+
+        function tambahGuest() {
+            const nama = inputGuest.value.trim();
+            if (nama === "") return;
+
+            daftarGuest.push(nama);
+            inputGuest.value = "";
+            inputGuest.focus();
+            renderGuest();
+            updateStatusAbsen();
+            simpanDataKeStorage();
+        }
+
+        function hapusGuest(index) {
+            daftarGuest.splice(index, 1);
+            renderGuest();
+            updateStatusAbsen();
+            simpanDataKeStorage();
+        }
+
+        function renderGuest() {
+            if (daftarGuest.length === 0) {
+                guestContainer.classList.add('hidden');
+                listGuest.innerHTML = "";
+                return;
+            }
+
+            guestContainer.classList.remove('hidden');
+            listGuest.innerHTML = "";
+            daftarGuest.forEach((nama, index) => {
+                const li = document.createElement('li');
+                li.className = "flex items-center justify-between bg-white px-3 py-1.5 border border-stone-200 rounded-lg text-sm shadow-sm";
+                li.innerHTML = `
+                    <span class="font-medium text-stone-700">⭐ ${nama} <span class="text-xs text-amber-600 font-normal">(Guest)</span></span>
+                    <button onclick="hapusGuest(${index})" class="text-rose-500 hover:text-rose-700 text-xs font-semibold px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 transition cursor-pointer">Hapus</button>
+                `;
+                listGuest.appendChild(li);
+            });
+        }
+
+        function updateStatusAbsen() {
+            const checkedAnggota = Array.from(document.querySelectorAll('.checkbox-anggota:checked')).map(cb => cb.value);
+            const totalHadir = checkedAnggota.length + daftarGuest.length;
+
+            selectedCount.innerText = `${totalHadir} hadir`;
+
+            if (totalHadir > 0) {
+                btnLanjut.disabled = false;
+                btnLanjut.classList.remove('bg-stone-300', 'text-stone-500', 'cursor-not-allowed');
+                btnLanjut.classList.add('bg-red-800', 'hover:bg-red-900', 'text-white', 'cursor-pointer');
+            } else {
+                btnLanjut.disabled = true;
+                btnLanjut.classList.remove('bg-red-800', 'hover:bg-red-900', 'text-white', 'cursor-pointer');
+                btnLanjut.classList.add('bg-stone-300', 'text-stone-500', 'cursor-not-allowed');
+            }
+        }
+
+        function lanjutKeHitung() {
+            const checkedAnggota = Array.from(document.querySelectorAll('.checkbox-anggota:checked')).map(cb => cb.value);
+            pemainHadir = [...checkedAnggota, ...daftarGuest];
+
+            if (pemainHadir.length === 0) return;
+
+            document.getElementById('section-absensi').classList.add('hidden');
+            document.getElementById('section-hitung').classList.remove('hidden');
+
+            const container = document.getElementById('input-kok-container');
+            container.innerHTML = "";
+
+            let savedKok = JSON.parse(localStorage.getItem(STORAGE_KEY + "_kok")) || {};
+
+            pemainHadir.forEach((nama, index) => {
+                const nilaiKok = savedKok[nama] !== undefined ? savedKok[nama] : 0;
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between bg-stone-50 p-3 rounded-xl border border-stone-200";
+                div.innerHTML = `
+                    <span class="font-medium text-sm text-stone-700 w-1/3 truncate" data-nama="${nama}">${nama}</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="ubahKok(${index}, -1)" class="w-8 h-8 bg-white border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-100 flex items-center justify-center cursor-pointer">-</button>
+                        <input type="number" id="kok-${index}" value="${nilaiKok}" min="0" oninput="hitungTotal(); simpanKokKeStorage();" 
+                               class="w-14 text-center py-1 border border-stone-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-red-800 bg-white">
+                        <button onclick="ubahKok(${index}, 1)" class="w-8 h-8 bg-white border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-100 flex items-center justify-center cursor-pointer">+</button>
+                        <span class="text-xs text-stone-400 w-12 text-right">pcs</span>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            hitungTotal();
+        }
+
+        function kembaliKeAbsen() {
+            document.getElementById('section-hitung').classList.add('hidden');
+            document.getElementById('section-absensi').classList.remove('hidden');
+        }
+
+        function ubahKok(index, delta) {
+            const input = document.getElementById(`kok-${index}`);
+            let val = parseInt(input.value) || 0;
+            val += delta;
+            if (val < 0) val = 0;
+            input.value = val;
+            hitungTotal();
+            simpanKokKeStorage();
+        }
+
+        function formatRupiah(angka) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+        }
+
+        function hitungTotal() {
+            let totalKok = 0;
+            let totalPatungan = 0;
+            let rincianList = [];
+
+            const valTanggal = inputTanggalSesi.value;
+            let tanggalHariIni = "";
+            if (valTanggal) {
+                const parts = valTanggal.split('-');
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                tanggalHariIni = d.toLocaleDateString('id-ID', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                });
+            } else {
+                tanggalHariIni = new Date().toLocaleDateString('id-ID', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                });
+            }
+
+            pemainHadir.forEach((nama, index) => {
+                const input = document.getElementById(`kok-${index}`);
+                const jml = input ? (parseInt(input.value) || 0) : 0;
+                const biaya = jml * PATUNGAN_PER_KOK;
+
+                totalKok += jml / 4;
+                totalPatungan += biaya;
+
+                rincianList.push(`- ${nama}: ${jml} kok (${formatRupiah(biaya)})`);
+            });
+
+            const kasTerakhir = parseFloat(inputKasTerakhir.value) || 0;
+            const totalInsentifKas = totalKok * INSENTIF_KAS_PER_KOK;
+            const totalKasTerbaru = kasTerakhir + totalInsentifKas;
+
+            document.getElementById('summary-total-kok').innerText = `${totalKok} pcs`;
+            document.getElementById('summary-total-patungan').innerText = formatRupiah(totalPatungan);
+            document.getElementById('summary-kas-terakhir').innerText = formatRupiah(kasTerakhir);
+            document.getElementById('summary-insentif-kas').innerText = `+ ${formatRupiah(totalInsentifKas)}`;
+            document.getElementById('summary-total-kas-akhir').innerText = formatRupiah(totalKasTerbaru);
+
+            let finalWaText = `*LAPORAN JGEER BADMINTON*\n`;
+            finalWaText += `📅 Hari/Tanggal: ${tanggalHariIni}\n`;
+            finalWaText += `💰 Patungan: Rp 5.000/kok \n\n`;
+            finalWaText += `*Rincian Pemain:*\n`;
+            finalWaText += rincianList.join('\n');
+            finalWaText += `\n\n---------------------------\n`;
+            finalWaText += `*Total Kok Terpakai:* ${totalKok} pcs\n`;
+            finalWaText += `*Total Patungan Pemain:* ${formatRupiah(totalPatungan)}\n`;
+            finalWaText += `---------------------------\n`;
+            finalWaText += `*REKAP KAS PB JGEER PER "${tanggalHariIni}":*\n`;
+            finalWaText += `- Kas Terakhir: ${formatRupiah(kasTerakhir)}\n`;
+            finalWaText += `- Pemasukan Kas Hari Ini : ${formatRupiah(totalInsentifKas)}\n`;
+            finalWaText += `👉 *TOTAL KAS SEKARANG:* ${formatRupiah(totalKasTerbaru)}\n`;
+            finalWaText += `---------------------------\n`;
+            finalWaText += `_Salam Jgeer, Tengs Slurd!_ 🙏`;
+
+            document.getElementById('wa-preview').value = finalWaText;
+        }
+
+        function simpanSesiKeRiwayat() {
+            let detailKok = {};
+            let totalKokSesi = 0;
+
+            pemainHadir.forEach((nama, index) => {
+                const input = document.getElementById(`kok-${index}`);
+                const jml = input ? (parseInt(input.value) || 0) : 0;
+                detailKok[nama] = jml;
+                totalKokSesi += jml / 4;
+            });
+
+            const checkedAnggota = Array.from(document.querySelectorAll('.checkbox-anggota:checked')).map(cb => cb.value);
+            const kasAwal = parseFloat(inputKasTerakhir.value) || 0;
+            const pemasukanKas = totalKokSesi * INSENTIF_KAS_PER_KOK;
+            const kasAkhir = kasAwal + pemasukanKas;
+
+            const dataSesi = {
+                id: idSesiEditing ? idSesiEditing : "sesi_" + Date.now(),
+                tanggal: inputTanggalSesi.value,
+                checkedAnggota: checkedAnggota,
+                daftarGuest: daftarGuest,
+                pemainHadir: pemainHadir,
+                detailKok: detailKok,
+                totalKok: totalKokSesi,
+                kasAwal: kasAwal,
+                pemasukanKas: pemasukanKas,
+                kasAkhir: kasAkhir,
+                waText: document.getElementById('wa-preview').value,
+                updatedAt: new Date().toISOString()
+            };
+
+            if (idSesiEditing) {
+                const idx = riwayatTransaksi.findIndex(item => item.id === idSesiEditing);
+                if (idx !== -1) {
+                    riwayatTransaksi[idx] = dataSesi;
+                }
+                batalEditSesi();
+            } else {
+                riwayatTransaksi.unshift(dataSesi);
+            }
+
+            riwayatTransaksi.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+            // SIMPAN PERMANEN KE LOCAL STORAGE & FIREBASE
+            simpanRiwayatKeStorage();
+            if (window.simpanKeFirebaseDoc) {
+                window.simpanKeFirebaseDoc(dataSesi);
+            }
+            gantiTab('riwayat');
+        }
+
+        function renderRiwayatList() {
+            const container = document.getElementById('list-riwayat-container');
+            const countLabel = document.getElementById('riwayat-count');
+            container.innerHTML = "";
+
+            countLabel.innerText = `${riwayatTransaksi.length} transaksi`;
+
+            if (riwayatTransaksi.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-stone-400 text-xs">
+                        Belum ada riwayat transaksi tersimpan.
+                    </div>
+                `;
+                return;
+            }
+
+            // Ambil maksimal 5 transaksi terakhir dari array
+            const limaTransaksiTerakhir = riwayatTransaksi.slice(0, 5);
+
+            limaTransaksiTerakhir.forEach((item) => {
+                const dateObj = new Date(item.tanggal + "T00:00:00");
+                const tglFormatted = dateObj.toLocaleDateString('id-ID', {
+                    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+                });
+
+                const card = document.createElement('div');
+                card.className = "bg-white border border-stone-200 rounded-xl p-4 space-y-3 shadow-sm hover:border-red-300 transition";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start border-b border-stone-100 pb-2">
+                        <div>
+                            <p class="font-bold text-stone-800 text-sm">${tglFormatted}</p>
+                            <p class="text-[11px] text-stone-500">${item.pemainHadir.length} Pemain • Total ${item.totalKok} Kok</p>
+                        </div>
+                        <span class="bg-red-50 text-red-900 font-bold text-xs px-2.5 py-1 rounded-lg border border-red-100">
+                            + ${formatRupiah(item.pemasukanKas)} Kas
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 text-xs text-stone-600 bg-stone-50 p-2.5 rounded-lg">
+                        <div>
+                            <span class="text-stone-400 block text-[10px]">Kas Awal:</span>
+                            <span class="font-semibold text-stone-700">${formatRupiah(item.kasAwal)}</span>
+                        </div>
+                        <div>
+                            <span class="text-stone-400 block text-[10px]">Kas Akhir:</span>
+                            <span class="font-semibold text-red-800">${formatRupiah(item.kasAkhir)}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-1 gap-2">
+                        <button onclick="salinWAById('${item.id}')" class="text-xs font-semibold text-stone-600 hover:text-stone-800 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer">
+                            📋 Salin WA
+                        </button>
+                        <div class="flex gap-1.5">
+                            <button onclick="editRevisiSesi('${item.id}')" class="text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-lg transition cursor-pointer">
+                                ✏️ Revisi
+                            </button>
+                            <button onclick="hapusSesiRiwayat('${item.id}')" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                                🗑️ Hapus
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function editRevisiSesi(id) {
+            const sesi = riwayatTransaksi.find(item => item.id === id);
+            if (!sesi) return;
+
+            idSesiEditing = id;
+
+            inputTanggalSesi.value = sesi.tanggal;
+            inputKasTerakhir.value = sesi.kasAwal;
+
+            const checkboxes = document.querySelectorAll('.checkbox-anggota');
+            checkboxes.forEach(cb => {
+                cb.checked = sesi.checkedAnggota.includes(cb.value);
+            });
+
+            daftarGuest = [...(sesi.daftarGuest || [])];
+            renderGuest();
+            updateStatusAbsen();
+
+            localStorage.setItem(STORAGE_KEY + "_kok", JSON.stringify(sesi.detailKok));
+
+            document.getElementById('banner-mode-edit').classList.remove('hidden');
+            document.getElementById('label-mode-edit').innerText = `✏️ Sedang Merevisi Sesi Transaksi (${sesi.tanggal})`;
+            document.getElementById('text-btn-simpan').innerText = "Simpan Hasil Revisi Transaksi";
+
+            gantiTab('rekap');
+            lanjutKeHitung();
+        }
+
+        function batalEditSesi() {
+            idSesiEditing = null;
+            document.getElementById('banner-mode-edit').classList.add('hidden');
+            document.getElementById('text-btn-simpan').innerText = "Simpan Transaksi ke Riwayat";
+            setTanggalHariIni();
+            setKasAwalOtomatis();
+        }
+
+        // HAPUS SESI TERPILIH Saja
+        function hapusSesiRiwayat(id) {
+            showConfirm(
+                "Hapus Sesi Transaksi",
+                "Apakah Anda yakin ingin menghapus catatan transaksi ini dari riwayat?",
+                () => {
+                    riwayatTransaksi = riwayatTransaksi.filter(item => item.id !== id);
+                    simpanRiwayatKeStorage();
+                    renderRiwayatList();
+                    setKasAwalOtomatis();
+                }
+            );
+        }
+
+        function salinWAById(id) {
+            const sesi = riwayatTransaksi.find(item => item.id === id);
+            if (!sesi) return;
+
+            fallbackCopyText(sesi.waText);
+        }
+
+        function simpanDataKeStorage() {
+            const checkedAnggota = Array.from(document.querySelectorAll('.checkbox-anggota:checked')).map(cb => cb.value);
+            const dataToSave = {
+                kasTerakhir: inputKasTerakhir.value || 0,
+                checkedAnggota: checkedAnggota,
+                daftarGuest: daftarGuest,
+                tanggalSesi: inputTanggalSesi.value
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+        }
+
+        function simpanKokKeStorage() {
+            let kokData = {};
+            pemainHadir.forEach((nama, index) => {
+                const input = document.getElementById(`kok-${index}`);
+                if (input) {
+                    kokData[nama] = parseInt(input.value) || 0;
+                }
+            });
+            localStorage.setItem(STORAGE_KEY + "_kok", JSON.stringify(kokData));
+        }
+
+        function simpanRiwayatKeStorage() {
+            try {
+                localStorage.setItem(RIWAYAT_KEY, JSON.stringify(riwayatTransaksi));
+            } catch (e) {
+                console.error("Gagal menyimpan ke LocalStorage:", e);
+            }
+        }
+
+        function muatRiwayatTersimpan() {
+            const savedRiwayat = localStorage.getItem(RIWAYAT_KEY);
+            if (savedRiwayat) {
+                try {
+                    riwayatTransaksi = JSON.parse(savedRiwayat);
+                    if (typeof renderRiwayatList === 'function') {
+                        renderRiwayatList();
+                    }
+                } catch(e) {
+                    console.error("Gagal membaca riwayat tersimpan:", e);
+                    riwayatTransaksi = [];
+                }
+            }
+        }
+
+        function muatDataTersimpan() {
+            const savedData = localStorage.getItem(STORAGE_KEY);
+            if (!savedData) return;
+
+            try {
+                const parsed = JSON.parse(savedData);
+                
+                if (parsed.kasTerakhir !== undefined) {
+                    inputKasTerakhir.value = parsed.kasTerakhir;
+                }
+
+                if (parsed.tanggalSesi) {
+                    inputTanggalSesi.value = parsed.tanggalSesi;
+                }
+
+                if (parsed.checkedAnggota && Array.isArray(parsed.checkedAnggota)) {
+                    const checkboxes = document.querySelectorAll('.checkbox-anggota');
+                    checkboxes.forEach(cb => {
+                        cb.checked = parsed.checkedAnggota.includes(cb.value);
+                    });
+                }
+
+                if (parsed.daftarGuest && Array.isArray(parsed.daftarGuest)) {
+                    daftarGuest = parsed.daftarGuest;
+                    renderGuest();
+                }
+            } catch(e) {
+                console.error("Gagal membaca data tersimpan", e);
+            }
+        }
+
+        // RESET HARI INI (Hanya menghapus absensi, guest, & kok hari ini)
+        function mintaResetHariIni() {
+            showConfirm(
+                "Reset Input Hari Ini",
+                "Apakah Anda yakin ingin mengosongkan absensi, daftar guest, dan kok terpakai untuk hari ini?",
+                () => {
+                    // Reset Checkbox Anggota
+                    const checkboxes = document.querySelectorAll('.checkbox-anggota');
+                    checkboxes.forEach(cb => cb.checked = false);
+
+                    // Reset Guest
+                    daftarGuest = [];
+                    renderGuest();
+
+                    // Reset Pemain & Kok
+                    pemainHadir = [];
+                    localStorage.removeItem(STORAGE_KEY + "_kok");
+
+                    // Batal mode edit jika sedang dalam mode revisi
+                    if (idSesiEditing) {
+                        batalEditSesi();
+                    }
+
+                    // Reset tanggal ke hari ini & kas ke transaksi terakhir
+                    setTanggalHariIni();
+                    setKasAwalOtomatis();
+
+                    // Kembalikan tampilan ke langkah absensi
+                    kembaliKeAbsen();
+                    updateStatusAbsen();
+                    simpanDataKeStorage();
+                }
+            );
+        }
+
+        function salinKeWA() {
+            const textToCopy = document.getElementById('wa-preview').value;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    tampilkanNotifCopy();
+                }).catch(() => {
+                    fallbackCopyText(textToCopy);
+                });
+            } else {
+                fallbackCopyText(textToCopy);
+            }
+        }
+
+        function fallbackCopyText(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    tampilkanNotifCopy();
+                } else {
+                    alert('Gagal menyalin teks.');
+                }
+            } catch (err) {
+                alert('Gagal menyalin teks.');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function tampilkanNotifCopy() {
+            const notif = document.getElementById('copy-notification');
+            notif.classList.remove('hidden');
+            setTimeout(() => {
+                notif.classList.add('hidden');
+            }, 3500);
+        }
+
+        // Expose functions called directly by inline HTML onclick handlers
+        window.mintaResetHariIni = mintaResetHariIni;
+        window.salinKeWA = salinKeWA;
+        window.gantiTab = gantiTab;
+        window.pilihSemua = pilihSemua;
+        window.tambahGuest = tambahGuest;
+        window.hapusGuest = hapusGuest;
+        window.lanjutKeHitung = lanjutKeHitung;
+        window.kembaliKeAbsen = kembaliKeAbsen;
+        window.ubahKok = ubahKok;
+        window.hitungTotal = hitungTotal;
+        window.simpanSesiKeRiwayat = simpanSesiKeRiwayat;
+        window.batalEditSesi = batalEditSesi;
+        window.editRevisiSesi = editRevisiSesi;
+        window.hapusSesiRiwayat = hapusSesiRiwayat;
+        window.salinWAById = salinWAById;
+        window.simpanDataKeStorage = simpanDataKeStorage;
+    </script>
+</body>
+</html>
